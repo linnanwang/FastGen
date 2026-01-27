@@ -8,6 +8,7 @@ Data loaders for FastGen training, supporting class-conditional image datasets a
 |------|-------------|-------------|
 | [class_cond_dataloader.py](class_cond_dataloader.py) | [Class-conditional image loaders](#class-conditional-datasets) | `ImageLoader` |
 | [wds_dataloaders.py](wds_dataloaders.py) | [WebDataset loaders for images/videos](#webdataset-loaders) | `WDSLoader`, `ImageWDSLoader`, `VideoWDSLoader` |
+| [../configs/data.py](../configs/data.py) | [Generic loader configs](#generic-loaders) | `ImageLatentLoaderConfig`, `VideoLatentLoaderConfig`, `PairLoaderConfig`, `PathLoaderConfig` |
 
 ---
 
@@ -83,7 +84,7 @@ with wds.ShardWriter("shards/shard-%05d.tar", maxcount=1000) as sink:
 
 Place shards in a directory with numeric naming (`00000.tar`, `00001.tar`, etc.).
 
-### General Loaders
+### Generic Loaders
 
 #### WDSLoader
 
@@ -107,6 +108,9 @@ MyLoader = L(WDSLoader)(
 For raw images (jpg, png, etc.) with automatic resize, center crop, and normalization.
 
 ```python
+from fastgen.datasets.wds_dataloaders import ImageWDSLoader
+from fastgen.utils import LazyCall as L
+
 MyImageLoader = L(ImageWDSLoader)(
     datatags=["WDS:/path/to/images"],
     batch_size=32,
@@ -115,11 +119,31 @@ MyImageLoader = L(ImageWDSLoader)(
 )
 ```
 
+#### ImageLatentLoaderConfig
+
+For precomputed image latents and text embeddings (faster than encoding on-the-fly):
+
+```python
+from fastgen.configs.data import ImageLatentLoaderConfig
+
+# Override datatags and files_map for your dataset
+MyImageLatentLoader = ImageLatentLoaderConfig.clone()
+MyImageLatentLoader.datatags = ["WDS:/path/to/my_image_latents"]
+MyImageLatentLoader.files_map = {"neg_condition": "/path/to/neg_prompt_emb.npy"}
+```
+
+Expected shard contents:
+- `latent.pth` - Precomputed image latent
+- `txt_emb.pth` - Precomputed text embedding
+
 #### VideoWDSLoader
 
 For raw videos (mp4, avi, etc.) with frame extraction and transforms.
 
 ```python
+from fastgen.datasets.wds_dataloaders import VideoWDSLoader
+from fastgen.utils import LazyCall as L
+
 MyVideoLoader = L(VideoWDSLoader)(
     datatags=["WDS:/path/to/videos"],
     batch_size=2,
@@ -129,6 +153,64 @@ MyVideoLoader = L(VideoWDSLoader)(
     img_size=(832, 480),      # Target (width, height)
 )
 ```
+
+#### VideoLatentLoaderConfig
+
+For precomputed video latents and text embeddings (faster than encoding on-the-fly):
+
+```python
+from fastgen.configs.data import VideoLatentLoaderConfig
+
+# Override datatags and files_map for your dataset
+MyVideoLatentLoader = VideoLatentLoaderConfig.clone()
+MyVideoLatentLoader.datatags = ["WDS:/path/to/my_video_latents"]
+MyVideoLatentLoader.files_map = {"neg_condition": "/path/to/neg_prompt_emb.npy"}
+# For v2v tasks, add condition latent (e.g., depth):
+# MyVideoLatentLoader.key_map["depth_latent"] = "depth_latent.pth"
+```
+
+Expected shard contents:
+- `latent.pth` - Precomputed video latent
+- `txt_emb.pth` - Precomputed text embedding
+
+### Knowledge Distillation Loaders
+
+Specialized loaders for knowledge distillation training. See [fastgen/methods/knowledge_distillation/README.md](../methods/knowledge_distillation/README.md) for more details.
+
+#### PairLoaderConfig
+
+For single-step KD with (real, noise, condition) pairs:
+
+```python
+from fastgen.configs.data import PairLoaderConfig
+
+# Override datatags for your dataset
+MyPairLoader = PairLoaderConfig.clone()
+MyPairLoader.datatags = ["WDS:/path/to/my_pairs"]
+```
+
+Expected shard contents:
+- `latent.pth` - Clean latent (target)
+- `noise.pth` - Noise sample
+- `txt_emb.pth` - Text embedding
+
+#### PathLoaderConfig
+
+For multi-step KD with denoising trajectories:
+
+```python
+from fastgen.configs.data import PathLoaderConfig
+
+# Override datatags for your dataset
+MyPathLoader = PathLoaderConfig.clone()
+MyPathLoader.datatags = ["WDS:/path/to/my_paths"]
+```
+
+Expected shard contents:
+- `latent.pth` - Clean latent (target)
+- `path.pth` - Denoising trajectory with shape `[steps, C, ...]` (typically 4 steps)
+- `txt_emb.pth` - Text embedding
+
 
 ### Key Parameters
 

@@ -28,14 +28,14 @@ Generate images and videos using pretrained or distilled models.
 
 ### Unconditional
 ```bash
-scripts/inference/image_model_inference.py \
+python scripts/inference/image_model_inference.py \
     --config fastgen/configs/experiments/EDM/config_sft_edm_cifar10.py \
     --do_student_sampling False --unconditional --num_samples 16 --num_steps 18
 ```
 
 ### Class-Conditional
 ```bash
-scripts/inference/image_model_inference.py \
+python scripts/inference/image_model_inference.py \
     --config fastgen/configs/experiments/DiT/config_sft_sit_xl.py \
     --do_student_sampling False --classes 1000 --num_steps 50 \
     --prompt_file scripts/inference/prompts/classes.txt \
@@ -44,7 +44,7 @@ scripts/inference/image_model_inference.py \
 
 ### Text-to-Image (T2I)
 ```bash
-scripts/inference/image_model_inference.py \
+python scripts/inference/image_model_inference.py \
     --config fastgen/configs/experiments/Flux/config_sft.py \
     --do_student_sampling False --num_steps 50 \
     - model.guidance_scale=3.5
@@ -52,7 +52,7 @@ scripts/inference/image_model_inference.py \
 
 ### Text-to-Video (T2V)
 ```bash
-scripts/inference/video_model_inference.py \
+python scripts/inference/video_model_inference.py \
     --config fastgen/configs/experiments/WanT2V/config_dmd2.py \
     --do_student_sampling False --num_steps 50 --fps 16 \
     --neg_prompt_file scripts/inference/prompts/negative_prompt.txt \
@@ -61,7 +61,7 @@ scripts/inference/video_model_inference.py \
 
 ### Image-to-Video (I2V)
 ```bash
-scripts/inference/video_model_inference.py \
+python scripts/inference/video_model_inference.py \
     --config fastgen/configs/experiments/WanI2V/config_dmd2_wan22_5b.py \
     --do_student_sampling False --num_steps 50 --fps 16 \
     --neg_prompt_file scripts/inference/prompts/negative_prompt.txt \
@@ -71,7 +71,7 @@ scripts/inference/video_model_inference.py \
 
 ### Video-to-Video (V2V)
 ```bash
-scripts/inference/video_model_inference.py \
+python scripts/inference/video_model_inference.py \
     --config fastgen/configs/experiments/WanV2V/config_sft.py \
     --do_student_sampling False --num_steps 50 --fps 16 \
     --neg_prompt_file scripts/inference/prompts/negative_prompt.txt \
@@ -81,7 +81,7 @@ scripts/inference/video_model_inference.py \
 
 ### Video2World (Cosmos)
 ```bash
-scripts/inference/video_model_inference.py \
+python scripts/inference/video_model_inference.py \
     --config fastgen/configs/experiments/CosmosPredict2/config_sft.py \
     --do_student_sampling False --num_steps 35 --fps 24 \
     --neg_prompt_file scripts/inference/prompts/negative_prompt_cosmos.txt \
@@ -94,7 +94,7 @@ scripts/inference/video_model_inference.py \
 Use causal configs (e.g., `config_sft_causal_wan22_5b.py`) for autoregressive generation.
 
 ```bash
-scripts/inference/video_model_inference.py \
+python scripts/inference/video_model_inference.py \
     --config fastgen/configs/experiments/WanI2V/config_sft_causal_wan22_5b.py \
     --do_student_sampling False --num_steps 50 --fps 16 \
     --neg_prompt_file scripts/inference/prompts/negative_prompt.txt \
@@ -115,9 +115,8 @@ Compute Fréchet Inception Distance (FID) for image models using [`fid/compute_f
 ### Usage
 
 ```bash
-scripts/fid/compute_fid_from_ckpts.py \
-    --config fastgen/configs/experiments/EDM/config_dmd2_cifar10.py \
-    - trainer.ddp=True
+torchrun --nproc_per_node=8 scripts/fid/compute_fid_from_ckpts.py \
+    --config fastgen/configs/experiments/EDM/config_dmd2_cifar10.py
 ```
 
 This script:

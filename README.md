@@ -45,8 +45,8 @@ fastgen/
 ### Installation
 
 ```bash
-git clone https://gitlab-master.nvidia.com/genair/fastgen.git
-cd fastgen
+git clone https://github.com/NVlabs/FastGen.git
+cd FastGen
 pip install -e .
 ```
 
@@ -91,8 +91,8 @@ For multi-GPU training, use DDP:
 
 ```bash
 torchrun --nproc_per_node=8 train.py \
-    --config=fastgen/configs/experiments/EDM/config_dmd2_test.py - \
-    trainer.ddp=True log_config.name=test_ddp
+    --config=fastgen/configs/experiments/EDM/config_dmd2_test.py \
+    - trainer.ddp=True log_config.name=test_ddp
 ```
 
 For large models, use FSDP2 for model sharding by replacing `trainer.ddp=True` with `trainer.fsdp=True`.

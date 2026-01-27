@@ -168,21 +168,13 @@ cython_debug/
 # temporal folder
 tmp/
 
-# local files
-s3_upload.py
-
 # credentials
 credentials
 
 # logs
 FASTGEN_OUTPUT/
-runs/
-out/
 wandb/
 *.err
-
-# sync scripts (local copy from chao/dev)
-local_ord_sync.sh
 
 # vscode
 *.vscode/

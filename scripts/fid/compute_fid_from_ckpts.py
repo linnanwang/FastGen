@@ -11,7 +11,6 @@ import numpy as np
 import PIL.Image
 import glob
 import json
-import pandas as pd
 from pathlib import Path
 import shutil
 
@@ -24,10 +23,9 @@ from fastgen.utils import instantiate
 from fastgen.utils.checkpointer import Checkpointer, FSDPCheckpointer
 from fastgen.utils import basic_utils
 from fastgen.utils.distributed import world_size, get_rank, synchronize, clean_up
-from fastgen.configs.data import DATA_ROOT_DIR
 from fastgen.utils.scripts import setup, parse_args
 
-from fastgen.eval.fid.fid import calc
+from scripts.fid.fid import calc
 
 DATASETS = {
     "cifar10-32x32.zip": "cifar10",
@@ -40,7 +38,7 @@ DATASETS = {
 """Generating samples, then calling FID score for evaluation.
 
 Examples: 
-    PYTHONPATH=$(pwd) FASTGEN_OUTPUT_ROOT='FASTGEN_OUTPUT' torchrun --nproc_per_node=8 --standalone eval/compute_fid_from_ckpts.py --config fastgen/configs/experiments/EDM/config_dmd2_cifar10.py - log_config.name=dmd2_cifar10 trainer.ddp=True
+    PYTHONPATH=$(pwd) FASTGEN_OUTPUT_ROOT='FASTGEN_OUTPUT' torchrun --nproc_per_node=8 --standalone scripts/fid/compute_fid_from_ckpts.py --config fastgen/configs/experiments/EDM/config_dmd2_cifar10.py
 """
 
 
@@ -85,12 +83,6 @@ def main(config: BaseConfig):
         dataset = DATASETS[config.dataloader_train.dataset_path.split("/")[-1]]
     except (KeyError, AttributeError):
         dataset = DATASETS[config.dataloader_train.datatags[0].split("/")[-1]]
-
-    if dataset == "coco2014":
-        path = Path(f"{DATA_ROOT_DIR}/prompts/coco2014_eval_prompt_30k.csv")
-        df = pd.read_csv(path)
-        all_text = list(df["caption"])
-        config.eval.num_samples = min(len(all_text), config.eval.num_samples)
 
     # Initialize the batches.
     num_batches = (
@@ -154,7 +146,7 @@ def main(config: BaseConfig):
             inference_net.vae.to(**ctx)
 
         # Loop over batches.
-        conditional = dataset in ["coco2014", "imagenet256"] or inference_net.label_dim > 0
+        conditional = (dataset == "imagenet256") or (inference_net.label_dim > 0)
         logger.info(
             f"{'Conditional' if conditional else 'Unconditional'} sampling of {config.eval.num_samples} "
             f"images to {outdir}..."
@@ -165,16 +157,7 @@ def main(config: BaseConfig):
             if batch_size == 0:
                 continue
 
-            if dataset == "coco2014":
-                # text-to-image generation on coco2014 prompt set
-                sublist = [all_text[i] for i in batch_seeds]
-                with basic_utils.inference_mode(
-                    inference_net.text_encoder,
-                    precision_amp=model.precision_amp_enc,
-                    device_type=model.device.type,
-                ):
-                    condition = basic_utils.to(inference_net.text_encoder.encode(sublist), **ctx)
-            elif dataset == "imagenet256":
+            if dataset == "imagenet256":
                 condition = torch.randint(1000, size=[batch_size], device=model.device)
             elif conditional:
                 condition = torch.eye(inference_net.label_dim, **ctx)[

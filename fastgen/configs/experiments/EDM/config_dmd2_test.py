@@ -10,9 +10,11 @@ def create_config():
 
     config.model.pretrained_model_path = f"{CKPT_ROOT_DIR}/cifar10/edm-cifar10-32x32-cond-vp.pth"
 
-    config.trainer.max_iter = 100000
+    config.trainer.max_iter = 5000
     config.trainer.logging_iter = 50
     config.trainer.save_ckpt_iter = 1000
+    config.trainer.batch_size_global = 64
+
     config.dataloader_train.batch_size = 64
 
     return config
