@@ -1,13 +1,13 @@
 import torch
 import numpy as np
-from PIL import Image
 from diffusers.pipelines.ltx2.export_utils import encode_video
 from fastgen.networks.LTX2.network import LTX2
 
+
 def test_ltx2_generation():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 # LTX-2 is optimized for bfloat16
-    
+    dtype = torch.bfloat16  # LTX-2 is optimized for bfloat16
+
     # 1. Initialize the LTX2 model
     print("Initializing LTX-2 model...")
     model = LTX2(model_id="Lightricks/LTX-2", load_pretrained=True).to(device, dtype=dtype)
@@ -15,58 +15,86 @@ def test_ltx2_generation():
     model.eval()
 
     # 2. Prepare Prompts
-    prompt = "A majestic dragon flying over a snowy mountain range, cinematic lighting, 4k"
+    prompt = "A high-performance sports car racing through a city street at night, neon lights reflecting off wet asphalt, motion blur streaking past the camera. The camera tracks low and close to the car as it accelerates aggressively, tires gripping the road, exhaust heat shimmering. Realistic lighting, cinematic depth of field, ultra-detailed textures, dynamic reflections, dramatic shadows, 4K realism, film-grade color grading."
     negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
-    
+
     print(f"Encoding prompt: {prompt}")
-    # Gemma 3 encoding
-    condition = model.text_encoder.encode(prompt, precision=dtype).to(device)
-    neg_condition = model.text_encoder.encode(negative_prompt, precision=dtype).to(device)
+    # FIX 1: encode() returns (embeds, mask) tuple — unpack and move each tensor separately
+    embeds, mask = model.text_encoder.encode(prompt, precision=dtype)
+    condition = (embeds.to(device), mask.to(device))
+    neg_embeds, neg_mask = model.text_encoder.encode(negative_prompt, precision=dtype)
+    neg_condition = (neg_embeds.to(device), neg_mask.to(device))
 
     # 3. Define Video Parameters
-    # LTX-2 video dimensions must be divisible by 32 spatially and 8+1 temporally
+    # LTX-2 video dimensions must be divisible by 32 spatially and (8n+1) temporally
     height, width = 480, 704
-    num_frames = 81 # (8 * 10) + 1
+    num_frames = 81  # (8 * 10) + 1
     batch_size = 1
-    
-    # Calculate latent dimensions (VAE compresses 8x spatially and 8x temporally)
-    latent_f = (num_frames - 1) // 8 + 1
-    latent_h = height // 32
-    latent_w = width // 32
-    
+
+    # Calculate latent dimensions
+    latent_f = (num_frames - 1) // model.vae_temporal_compression_ratio + 1
+    latent_h = height // model.vae_spatial_compression_ratio
+    latent_w = width // model.vae_spatial_compression_ratio
+
     # 4. Generate Initial Noise
-    # LTX-2 VAE latent channels is typically 128
-    latent_channels = model.vae.vae.config.latent_channels
-    noise = torch.randn(batch_size, latent_channels, latent_f, latent_h, latent_w, device=device, dtype=dtype)
+    # FIX 2: model.vae IS AutoencoderKLLTX2Video directly — no .vae sub-attribute.
+    #         Use transformer.config.in_channels as the pipeline does (line 989).
+    latent_channels = model.transformer.config.in_channels  # 128
+
+    # FIX 3: noise must be float32 — the pipeline creates latents in torch.float32
+    #         (prepare_latents line 997) and keeps them float32 through the scheduler.
+    #         Only cast to bfloat16 right before the transformer call.
+    noise = torch.randn(
+        batch_size, latent_channels, latent_f, latent_h, latent_w,
+        device=device, dtype=torch.float32
+    )
 
     # 5. Run Sampling (Inference)
     print("Starting sampling process...")
     with torch.no_grad():
-        latents = model.sample(
+        latents, audio_latents = model.sample(
             noise=noise,
             condition=condition,
             neg_condition=neg_condition,
             guidance_scale=4.0,
-            num_steps=40
+            num_steps=40,
+            fps=24.0,
         )
+    # latents:       [B, C, F, H, W] denormalised video latents (float32)
+    # audio_latents: [B, C, L, M]    denormalised audio latents (float32)
 
-    # 6. Decode Latents to Video
-    print("Decoding latents to video...")
+    # 6. Decode Latents to Video + Audio
+    print("Decoding latents to video and audio...")
     with torch.no_grad():
-        # LTX-2 uses flow-matching, so we can pass a zero/final timestep if needed by the VAE
-        video_tensor = model.vae.decode(latents)
+        # vae.decode() signature: decode(z, temb=None, causal=None, return_dict=True)
+        # timestep_conditioning is False for LTX-2, so no temb needed.
+        # Use return_dict=False to get the tensor directly.
+        video_tensor = model.vae.decode(latents.to(model.vae.dtype), return_dict=False)[0]
+        # video_tensor: [B, C, F, H, W] in ~[-1, 1]
+
+        # Decode mel spectrogram -> waveform via audio_vae + vocoder
+        mel_spectrograms = model.audio_vae.decode(
+            audio_latents.to(model.audio_vae.dtype), return_dict=False
+        )[0]
+        audio_waveform = model.vocoder(mel_spectrograms)
+        # audio_waveform: [B, channels, samples] at vocoder.config.output_sampling_rate Hz
 
     # 7. Post-process and Save
-    # Video tensor is [B, C, F, H, W] in range [-1, 1]
-    video_np = ((video_tensor[0].cpu().permute(1, 2, 3, 0).numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
-    
+    # Convert [B, C, F, H, W] -> [F, H, W, C] uint8
+    video_np = (
+        (video_tensor[0].cpu().float().permute(1, 2, 3, 0).numpy() + 1.0) * 127.5
+    ).clip(0, 255).astype(np.uint8)
+
     print("Saving video to ltx2_test.mp4...")
     encode_video(
         video_np,
         fps=24,
-        output_path="ltx2_test.mp4"
+        audio=audio_waveform[0].float().cpu(),
+        audio_sample_rate=model.vocoder.config.output_sampling_rate,  # 24000 Hz
+        output_path="ltx2_test.mp4",
     )
     print("Done!")
+
 
 if __name__ == "__main__":
     test_ltx2_generation()
