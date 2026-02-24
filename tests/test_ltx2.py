@@ -18,7 +18,9 @@ def test_ltx2_generation():
     model.eval()
 
     # 2. Prepare Prompts
-    prompt = "A high-performance sports car racing through a city street at night, neon lights reflecting off wet asphalt, motion blur streaking past the camera. The camera tracks low and close to the car as it accelerates aggressively, tires gripping the road, exhaust heat shimmering. Realistic lighting, cinematic depth of field, ultra-detailed textures, dynamic reflections, dramatic shadows, 4K realism, film-grade color grading."
+    # prompt = "A high-performance sports car racing through a city street at night, neon lights reflecting off wet asphalt, motion blur streaking past the camera. The camera tracks low and close to the car as it accelerates aggressively, tires gripping the road, exhaust heat shimmering. Realistic lighting, cinematic depth of field, ultra-detailed textures, dynamic reflections, dramatic shadows, 4K realism, film-grade color grading."
+    prompt = "A tight close-up shot of a musician's hands playing a grand piano. The audio is a fast-paced, uplifting classical piano sonata. The pressing of the black and white keys visually syncs with the rapid flurry of high-pitched musical notes. There is a slight echo, suggesting the piano is in a large, empty concert hall."
+    prompt = "A street performer sitting on a brick stoop, strumming an acoustic guitar. The audio features a warm, indie-folk guitar chord progression. Over the guitar, a smooth, soulful human voice sings a slow, bluesy melody without words, just melodic humming and 'oohs'. The rhythmic strumming of the guitar perfectly matches the tempo of the vocal melody. Faint city traffic can be heard quietly in the deep background." 
     negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
 
     print(f"Encoding prompt: {prompt}")
